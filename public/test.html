@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Test</title>
+</head>
+<body>
+    <h1>Direct HTML Test</h1>
+    <div id="status">Loading...</div>
+    <div id="results"></div>
+    
+    <script>
+        console.log('Script loaded!');
+        document.getElementById('status').textContent = 'Script running...';
+        
+        const coins = [
+            { id: 'bitcoin', feedId: 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43' },
+            { id: 'ethereum', feedId: 'ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace' }
+        ];
+        
+        async function test() {
+            try {
+                const url = new URL('https://hermes.pyth.network/api/latest_price_feeds');
+                coins.forEach(coin => url.searchParams.append('ids[]', coin.feedId));
+                
+                console.log('Fetching:', url.toString());
+                document.getElementById('status').textContent = 'Fetching...';
+                
+                const res = await fetch(url.toString());
+                console.log('Status:', res.status);
+                
+                if (!res.ok) {
+                    document.getElementById('status').textContent = `Error: ${res.status}`;
+                    return;
+                }
+                
+                const data = await res.json();
+                console.log('Data:', data);
+                document.getElementById('status').textContent = `Got ${data.length} prices!`;
+                
+                const html = data.map(d => {
+                    const price = parseFloat(d.price.price) * Math.pow(10, d.price.expo);
+                    return `<p>${d.id}: $${price.toFixed(2)}</p>`;
+                }).join('');
+                
+                document.getElementById('results').innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        test();
+    </script>
+</body>
+</html>

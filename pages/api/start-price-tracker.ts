@@ -1,17 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { addPriceToHistory } from "./price-history";
+import { priceStore } from "../../lib/priceStore";
+import { TOP_COINS } from "../../lib/coins";
 
-let isTracking = false;
-let trackingInterval: NodeJS.Timeout | null = null;
-
-// Hàm fetch giá và lưu vào lịch sử
-const fetchAndStorePrice = async () => {
+// Hàm fetch giá tất cả coins và lưu vào lịch sử
+const fetchAndStorePrices = async () => {
   try {
-    const ADA_USD_PRICE_FEED_ID =
-      "0x2a01deaec9e51a579277b34b122399984d0bbf57e2458a7e42fecd2829867a0d";
-
+    // Tạo query string với tất cả price feed IDs
+    const priceFeeds = TOP_COINS.map(coin => `ids[]=${coin.priceFeedId}`).join('&');
+    
     const pythResponse = await fetch(
-      `https://hermes.pyth.network/api/latest_price_feeds?ids[]=${ADA_USD_PRICE_FEED_ID}`,
+      `https://hermes.pyth.network/api/latest_price_feeds?${priceFeeds}`,
       {
         headers: {
           Accept: "application/json",
@@ -23,15 +21,24 @@ const fetchAndStorePrice = async () => {
       const data = await pythResponse.json();
       
       if (data && data.length > 0) {
-        const priceData = data[0];
-        const priceInfo = priceData.price;
-        const price = parseFloat(priceInfo.price) * Math.pow(10, priceInfo.expo);
-        const finalPrice = parseFloat(price.toFixed(6));
-        
-        // Lưu vào lịch sử
-        addPriceToHistory(finalPrice, "Pyth Network");
-        
-        console.log(`[Price Tracker] Stored price: $${finalPrice}`);
+        // Xử lý từng coin
+        data.forEach((priceData: any) => {
+          const priceFeedId = priceData.id;
+          
+          // Tìm coin tương ứng
+          const coin = TOP_COINS.find(c => c.priceFeedId === priceFeedId);
+          
+          if (coin) {
+            const priceInfo = priceData.price;
+            const price = parseFloat(priceInfo.price) * Math.pow(10, priceInfo.expo);
+            const finalPrice = parseFloat(price.toFixed(6));
+            
+            // Lưu vào lịch sử với coinId
+            priceStore.addPrice(coin.id, finalPrice, "Pyth Network");
+            
+            console.log(`[Price Tracker] ${coin.symbol}: $${finalPrice}`);
+          }
+        });
       }
     }
   } catch (error) {
@@ -45,7 +52,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method === 'POST') {
-    if (isTracking) {
+    if (priceStore.getTracking()) {
       return res.status(200).json({
         success: true,
         message: "Price tracker is already running"
@@ -53,26 +60,28 @@ export default async function handler(
     }
     
     // Bắt đầu tracking
-    isTracking = true;
+    priceStore.setTracking(true);
     
     // Fetch ngay lập tức
-    await fetchAndStorePrice();
+    await fetchAndStorePrices();
     
     // Sau đó fetch mỗi giây
-    trackingInterval = setInterval(fetchAndStorePrice, 1000);
+    const interval = setInterval(fetchAndStorePrices, 1000);
+    priceStore.setInterval(interval);
+    
+    console.log("[Price Tracker] Started tracking all coins");
     
     return res.status(200).json({
       success: true,
-      message: "Price tracker started"
+      message: "Price tracker started for all coins"
     });
   }
   
   if (req.method === 'DELETE') {
-    if (trackingInterval) {
-      clearInterval(trackingInterval);
-      trackingInterval = null;
-    }
-    isTracking = false;
+    priceStore.clearInterval();
+    priceStore.setTracking(false);
+    
+    console.log("[Price Tracker] Stopped tracking");
     
     return res.status(200).json({
       success: true,
@@ -83,7 +92,7 @@ export default async function handler(
   if (req.method === 'GET') {
     return res.status(200).json({
       success: true,
-      isTracking
+      isTracking: priceStore.getTracking()
     });
   }
   
