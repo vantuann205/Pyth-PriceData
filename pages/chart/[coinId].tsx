@@ -28,7 +28,18 @@ export default function CoinChart() {
     return cached?.price || null;
   };
   
-  const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  // Load 30 điểm lịch sử từ cache ngay lập tức
+  const getInitialHistory = (): PricePoint[] => {
+    if (!coin) return [];
+    const history = priceCache.getHistory(coin.id);
+    return history.map(h => ({
+      time: h.time,
+      price: h.price,
+      timestamp: h.timestamp
+    }));
+  };
+  
+  const [priceHistory, setPriceHistory] = useState<PricePoint[]>(getInitialHistory);
   const [currentPrice, setCurrentPrice] = useState<number | null>(getCachedPrice);
   const [source, setSource] = useState<string>('Pyth Network');
   const [isConnected, setIsConnected] = useState<boolean>(true);
@@ -71,28 +82,6 @@ export default function CoinChart() {
         return newHistory;
       });
     });
-
-    // Load history SONG SONG (không block)
-    fetch(`/api/price-history?coinId=${coin.id}&limit=50`)
-      .then(res => res.json())
-      .then(historyData => {
-        if (historyData.success && historyData.data.length > 0) {
-          const historicalData: PricePoint[] = historyData.data.map((item: any) => ({
-            time: new Date(item.timestamp).toLocaleTimeString('vi-VN'),
-            price: item.price,
-            timestamp: item.timestamp
-          }));
-          
-          // Merge history với current data
-          setPriceHistory(prev => {
-            if (prev.length === 0) return historicalData;
-            const oldestNewTimestamp = prev[0]?.timestamp || Date.now();
-            const oldHistory = historicalData.filter(h => h.timestamp < oldestNewTimestamp);
-            return [...oldHistory, ...prev];
-          });
-        }
-      })
-      .catch(err => console.error('Error loading history:', err));
 
     return () => {
       unsubscribe();

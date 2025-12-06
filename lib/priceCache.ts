@@ -7,15 +7,25 @@ interface CachedPrice {
   dayStartTimestamp?: number; // Timestamp của giá đầu ngày
 }
 
+interface PriceHistoryPoint {
+  price: number;
+  timestamp: number;
+  time: string;
+}
+
 class PriceCache {
   private cache: Map<string, CachedPrice> = new Map();
   private listeners: Map<string, Set<(price: CachedPrice) => void>> = new Map();
   private dayStartPrices: Map<string, { price: number; timestamp: number }> = new Map();
+  private priceHistory: Map<string, PriceHistoryPoint[]> = new Map(); // Lưu 30 điểm lịch sử
   private readonly STORAGE_KEY = 'crypto_day_start_prices';
+  private readonly HISTORY_STORAGE_KEY = 'crypto_price_history';
+  private readonly MAX_HISTORY_POINTS = 30;
 
   constructor() {
     // Load day start prices từ localStorage khi khởi tạo
     this.loadDayStartPrices();
+    this.loadPriceHistory();
   }
 
   // Load day start prices từ localStorage
@@ -50,6 +60,43 @@ class PriceCache {
     }
   }
 
+  // Load price history từ localStorage
+  private loadPriceHistory() {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const stored = localStorage.getItem(this.HISTORY_STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        Object.entries(data).forEach(([coinId, history]: [string, any]) => {
+          this.priceHistory.set(coinId, history);
+        });
+      }
+    } catch (error) {
+      console.error('Error loading price history:', error);
+    }
+  }
+
+  // Save price history vào localStorage
+  private savePriceHistory() {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const data: Record<string, any> = {};
+      this.priceHistory.forEach((value, key) => {
+        data[key] = value;
+      });
+      localStorage.setItem(this.HISTORY_STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving price history:', error);
+    }
+  }
+
+  // Lấy price history của coin
+  getHistory(coinId: string): PriceHistoryPoint[] {
+    return this.priceHistory.get(coinId) || [];
+  }
+
   // Lấy giá từ cache
   get(coinId: string): CachedPrice | null {
     return this.cache.get(coinId) || null;
@@ -79,6 +126,22 @@ class PriceCache {
     };
     
     this.cache.set(coinId, cached);
+    
+    // Thêm vào price history (giữ 30 điểm gần nhất)
+    let history = this.priceHistory.get(coinId) || [];
+    history.push({
+      price,
+      timestamp: now,
+      time: new Date(now).toLocaleTimeString('vi-VN')
+    });
+    
+    // Giữ tối đa 30 điểm
+    if (history.length > this.MAX_HISTORY_POINTS) {
+      history = history.slice(-this.MAX_HISTORY_POINTS);
+    }
+    
+    this.priceHistory.set(coinId, history);
+    this.savePriceHistory(); // Lưu vào localStorage
     
     // Notify tất cả listeners
     const listeners = this.listeners.get(coinId);
