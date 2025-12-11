@@ -103,5 +103,5 @@ setPriceHistory(prev => {
     return newHistory.slice(-60);
   }
   return newHistory;
-});
+});.
 ```
