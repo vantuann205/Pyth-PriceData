@@ -1,4 +1,4 @@
-# Lấy Giá ADA Real-time từ Pyth Network
+# Lấy Giá TOP10 Coim Real-time từ Pyth Network
 
 Ứng dụng Next.js hiển thị giá ADA (Cardano) **real-time** từ Pyth Network Oracle với cập nhật **mỗi giây**.
 
@@ -15,7 +15,7 @@
 ## Demo
 
 ### Trang Chính (Real-time Price)
-- Giá ADA/USD cập nhật mỗi giây
+- Giá 10 Coin cập nhật mỗi giây
 - Animation màu xanh khi giá tăng, đỏ khi giá giảm
 - Hiển thị % thay đổi giá
 - Confidence interval từ Pyth Network
